@@ -153,6 +153,7 @@ pub enum DataKey {
     PriceHistory(u128),
     MinPrice,
     MaxPrice,
+    PromptExpiryWarning(u128),
 }
 
 /// #192 – A single recorded price change for a prompt.
@@ -221,6 +222,17 @@ pub struct Promotion {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Settlement {
+    pub buyer_amount: i128,
+    pub creator_amount: i128,
+    pub platform_amount: i128,
+    pub referrer: Option<Address>,
+    pub referrer_amount: i128,
+    pub split_amount: i128,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Purchase {
     pub prompt_id: u128,
     pub original_creator: Address,
@@ -266,6 +278,24 @@ pub struct ListingConfig {
     pub expires_at: u64,
     /// Optional co-creator revenue splits (empty Vec = no splits).
     pub splits: Vec<Split>,
+}
+
+/// Input payload for a single prompt in a batch-creation call.
+/// Mirrors the individual parameters of `create_prompt` but packaged into
+/// one Soroban-transportable struct so the batch entrypoint can accept a
+/// `Vec<PromptInput>` instead of repeating the full parameter list.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PromptInput {
+    pub image_url: String,
+    pub title: String,
+    pub category: String,
+    pub preview_text: String,
+    pub encrypted_prompt: String,
+    pub encryption_iv: String,
+    pub wrapped_key: String,
+    pub content_hash: BytesN<32>,
+    pub listing: ListingConfig,
 }
 
 /// Canonical taxonomy for content classification.
@@ -410,6 +440,12 @@ pub trait PromptHashTrait {
         content_hash: BytesN<32>,
         listing: ListingConfig,
     ) -> Result<u128, Error>;
+
+    fn create_prompt_batch(
+        env: Env,
+        creator: Address,
+        prompts: Vec<PromptInput>,
+    ) -> Result<Vec<u128>, Error>;
 
     fn set_prompt_sale_status(
         env: Env,
@@ -556,6 +592,13 @@ pub trait PromptHashTrait {
         referrer: Address,
         code_hash: BytesN<32>,
     ) -> Result<(), Error>;
+
+    fn revoke_referral_code(
+        env: Env,
+        referrer: Address,
+        code_hash: BytesN<32>,
+    ) -> Result<(), Error>;
+
     fn set_pause_status(
         env: Env,
         paused: bool,
